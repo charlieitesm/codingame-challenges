@@ -47,18 +47,67 @@ n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case1.txt")
 
 
 class Graph:
+    DEFAULT_LENGTH = 1
+
     def __init__(self, edges: dict, goals: list):
         self.nodes = edges.keys()
         self.goal_nodes = goals
         self.edges = edges
-        self.distances = {}
 
     def sever_link(self, from_node: int, to_node: int):
-        pass
+        self.edges.get(from_node).remove(to_node)
+        self.edges.get(to_node).remove(from_node)
 
-    def dijsktra_distances(self, from_node: int):
-        distances = [None for _ in range(len(self.nodes))]
-        distances[from_node] = 0
+    def dijsktra_distances(self, from_node: int) -> tuple:
+        dist = {}
+        prev = {}
+        heap_queue = []
+
+        for n1 in self.nodes:
+            priority = math.inf if n1 != from_node else 0
+            dist[n1] = priority
+            prev[n1] = None
+
+            # heapq uses a tuple where the first element is the value to order
+            heap_queue.append((priority, n1))
+
+        heapq.heapify(heap_queue)
+
+        while heap_queue:
+            u = heapq.heappop(heap_queue)[1]
+
+            for v in self.edges.get(u):
+                alt = dist.get(u) + Graph.DEFAULT_LENGTH
+
+                if alt < dist.get(v):
+                    dist[v] = alt
+                    prev[v] = u
+
+                    # Update value of neighbor v
+                    for i in range(len(heap_queue)):
+                        priority, n1 = heap_queue[i]
+
+                        if n1 == v:
+                            heap_queue[i] = (alt, v)
+                            break
+
+            heapq.heapify(heap_queue)
+
+        return dist, prev
+
+    def dijsktra_distances_to_goals(self, from_node: int, goals: list) -> tuple:
+        dist, prev = self.dijsktra_distances(from_node)
+
+        new_dist = {}
+        new_prev = {}
+
+        for g in goals:
+            goal_distance = dist.get(g)
+
+            if goal_distance != math.inf:
+                new_dist[g] = dist.get(g)
+                new_prev[g] = prev.get(g)
+        return new_dist, new_prev
 
 
 network = Graph(links_map, gateway_nodes)
@@ -73,16 +122,19 @@ network = Graph(links_map, gateway_nodes)
 # Calculate the distance from the nodes that lead to gateways to the agent so that we can
 #  shut them down first, this is a Best-First search
 # game loop
-while True:
-    si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
+# while True:
+for si in [0, 3, 7, 3, 6]:
+    #si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
     print(str(si), file=sys.stderr)
 
-    heap = [(abs(gateway_tuple[1] - si), gateway_tuple) for gateway_tuple in valid_gateway_links]
-    heapq.heapify(heap)
+    distances, previous_nodes = network.dijsktra_distances_to_goals(si, gateway_nodes)
 
-    print(f"The Agent is at {si}", file=sys.stderr)
-    print(f"Heap: {heap}", file=sys.stderr)
+    if not distances:
+        break
 
-    link_to_shutdown = heapq.heappop(heap)[1]
-    link_str = " ".join([str(x) for x in link_to_shutdown])
-    print(link_str)
+    gateway_to_shutdown = min(distances, key=distances.get)
+    from_node_sever_link = previous_nodes.get(gateway_to_shutdown)
+
+    print(f"{str(from_node_sever_link)} {str(gateway_to_shutdown)}")
+    network.sever_link(from_node_sever_link, gateway_to_shutdown)
+
