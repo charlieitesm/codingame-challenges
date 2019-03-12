@@ -43,7 +43,7 @@ from skynet_revolution.episode2.file_utils import debug_get_info_from_file
 #
 # print(f"Gateway links: {valid_gateway_links}", file=sys.stderr)
 
-n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case2.txt")
+n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case3.txt")
 
 
 class Graph:
@@ -142,7 +142,7 @@ previous_from_node_sever_link = -1
 #  shut them down first, this is a Best-First search
 # game loop
 # while True:
-for si in [0, 9, 2, 6]:
+for si in [2, 3, 8, 17, 16]:
     #si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
     print(str(si), file=sys.stderr)
 
