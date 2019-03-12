@@ -43,7 +43,7 @@ from skynet_revolution.episode2.file_utils import debug_get_info_from_file
 #
 # print(f"Gateway links: {valid_gateway_links}", file=sys.stderr)
 
-n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case1.txt")
+n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case2.txt")
 
 
 class Graph:
@@ -109,9 +109,28 @@ class Graph:
                 new_prev[g] = prev.get(g)
         return new_dist, new_prev
 
+    @staticmethod
+    def get_gateway_to_shutdown(candidate_distances: dict, prev_nodes: dict, previous_from_node: int) -> int:
+        # This will let us switch between gateway nodes and make sure we have a better chance at catching the agent
+        candidate_gateway = min(candidate_distances, key=candidate_distances.get)
+
+        if previous_from_node < 0:
+            return candidate_gateway
+
+        min_value = candidate_distances[candidate_gateway]
+
+        other_candidates = {k: v for k, v in candidate_distances.items() if v == min_value and k != candidate_gateway}
+
+        for new_candidate in other_candidates.keys():
+            if previous_from_node_sever_link != prev_nodes[new_candidate]:
+                candidate_gateway = new_candidate
+                break
+
+        return candidate_gateway
+
 
 network = Graph(links_map, gateway_nodes)
-
+previous_from_node_sever_link = -1
 
 # Write an action using print
 # To debug: print("Debug messages...", file=sys.stderr)
@@ -123,7 +142,7 @@ network = Graph(links_map, gateway_nodes)
 #  shut them down first, this is a Best-First search
 # game loop
 # while True:
-for si in [0, 3, 7, 3, 6]:
+for si in [0, 9, 2, 6]:
     #si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
     print(str(si), file=sys.stderr)
 
@@ -132,9 +151,12 @@ for si in [0, 3, 7, 3, 6]:
     if not distances:
         break
 
-    gateway_to_shutdown = min(distances, key=distances.get)
+    gateway_to_shutdown = network.get_gateway_to_shutdown(distances, previous_nodes, previous_from_node_sever_link)
+
     from_node_sever_link = previous_nodes.get(gateway_to_shutdown)
 
     print(f"{str(from_node_sever_link)} {str(gateway_to_shutdown)}")
     network.sever_link(from_node_sever_link, gateway_to_shutdown)
+
+    previous_from_node_sever_link = from_node_sever_link
 
