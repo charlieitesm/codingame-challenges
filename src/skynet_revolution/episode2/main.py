@@ -107,7 +107,7 @@ class Graph:
                 new_prev[g] = prev.get(g)
         return new_dist, new_prev
 
-    def get_gateway_to_shutdown(self, d: dict, p: dict, previous_from_node: int) -> tuple:
+    def get_gateway_to_shutdown(self, d: dict, p: dict) -> tuple:
         # This will let us switch between gateway nodes and make sure we have a better chance at catching the agent
         goal_dist, goal_prev = self.filter_dijsktra_distances_to_goals(d, p)
 
@@ -116,15 +116,7 @@ class Graph:
         min_value = goal_dist[candidate_gateway]
 
         if min_value < Graph.SAFE_DISTANCE: # The next gateway is not at a safe distance, shut it down ASAP!
-            if previous_from_node < 0:
-                return p.get(candidate_gateway), candidate_gateway
 
-            other_candidates = {k: v for k, v in goal_dist.items() if v == min_value and k != candidate_gateway}
-
-            for new_candidate in other_candidates.keys():
-                if previous_from_node_sever_link != goal_prev[new_candidate]:
-                    candidate_gateway = new_candidate
-                break
             from_node = p.get(candidate_gateway)
 
         else:
@@ -184,12 +176,8 @@ for si in [0, 3, 6, 3, 7]:
     if not network.filter_dijsktra_distances_to_goals(distances, previous_nodes)[0]:
         break
 
-    from_node_sever_link, gateway_to_shutdown = network.get_gateway_to_shutdown(distances,
-                                                          previous_nodes,
-                                                          previous_from_node_sever_link)
+    from_node_sever_link, gateway_to_shutdown = network.get_gateway_to_shutdown(distances, previous_nodes)
 
     print(f"{str(from_node_sever_link)} {str(gateway_to_shutdown)}")
     network.sever_link(from_node_sever_link, gateway_to_shutdown)
-
-    previous_from_node_sever_link = from_node_sever_link
 
