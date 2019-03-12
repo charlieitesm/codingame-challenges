@@ -2,7 +2,6 @@ import sys
 import math
 import heapq
 
-from collections import defaultdict
 from skynet_revolution.episode2.file_utils import debug_get_info_from_file
 
 # Auto-generated code below aims at helping you parse
@@ -43,11 +42,12 @@ from skynet_revolution.episode2.file_utils import debug_get_info_from_file
 #
 # print(f"Gateway links: {valid_gateway_links}", file=sys.stderr)
 
-n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case3.txt")
+n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case1.txt")
 
 
 class Graph:
     DEFAULT_LENGTH = 1
+    SAFE_DISTANCE = 2
 
     def __init__(self, edges: dict, goals: list):
         self.nodes = edges.keys()
@@ -95,13 +95,11 @@ class Graph:
 
         return dist, prev
 
-    def dijsktra_distances_to_goals(self, from_node: int, goals: list) -> tuple:
-        dist, prev = self.dijsktra_distances(from_node)
-
+    def filter_dijsktra_distances_to_goals(self, dist: dict, prev: dict) -> tuple:
         new_dist = {}
         new_prev = {}
 
-        for g in goals:
+        for g in self.goal_nodes:
             goal_distance = dist.get(g)
 
             if goal_distance != math.inf:
@@ -109,24 +107,59 @@ class Graph:
                 new_prev[g] = prev.get(g)
         return new_dist, new_prev
 
-    @staticmethod
-    def get_gateway_to_shutdown(candidate_distances: dict, prev_nodes: dict, previous_from_node: int) -> int:
+    def get_gateway_to_shutdown(self, d: dict, p: dict, previous_from_node: int) -> tuple:
         # This will let us switch between gateway nodes and make sure we have a better chance at catching the agent
-        candidate_gateway = min(candidate_distances, key=candidate_distances.get)
+        goal_dist, goal_prev = self.filter_dijsktra_distances_to_goals(d, p)
 
-        if previous_from_node < 0:
-            return candidate_gateway
+        candidate_gateway = min(goal_dist, key=goal_dist.get)
 
-        min_value = candidate_distances[candidate_gateway]
+        min_value = goal_dist[candidate_gateway]
 
-        other_candidates = {k: v for k, v in candidate_distances.items() if v == min_value and k != candidate_gateway}
+        if min_value < Graph.SAFE_DISTANCE: # The next gateway is not at a safe distance, shut it down ASAP!
+            if previous_from_node < 0:
+                return p.get(candidate_gateway), candidate_gateway
 
-        for new_candidate in other_candidates.keys():
-            if previous_from_node_sever_link != prev_nodes[new_candidate]:
-                candidate_gateway = new_candidate
+            other_candidates = {k: v for k, v in goal_dist.items() if v == min_value and k != candidate_gateway}
+
+            for new_candidate in other_candidates.keys():
+                if previous_from_node_sever_link != goal_prev[new_candidate]:
+                    candidate_gateway = new_candidate
                 break
+            from_node = p.get(candidate_gateway)
 
-        return candidate_gateway
+        else:
+            # We have leeway to start shutting down problematic nodes that lead to two different gateways
+            problem_node_count = self.get_problem_node_count()
+
+            if not problem_node_count: # If there are no problems, return the candidate_gateway
+                return p.get(candidate_gateway), candidate_gateway
+
+            problem_distance = math.inf
+            most_problematic_node = None
+            gateway_connected_to_problem_node = None
+
+            for k in problem_node_count.keys():
+                if d[k] < problem_distance:
+                    problem_distance = problem_node_count[k][0]
+                    most_problematic_node = k
+                    gateway_connected_to_problem_node = problem_node_count[k][1]
+
+            candidate_gateway = gateway_connected_to_problem_node
+            from_node = most_problematic_node
+
+        return from_node, candidate_gateway
+
+    def get_problem_node_count(self) -> dict:
+        problem_node_count = {}
+
+        for g in self.goal_nodes:
+            for neighbor in self.edges.get(g):
+                if neighbor in problem_node_count:
+                    problem_node_count[neighbor][0] += 1
+                else:
+                    problem_node_count[neighbor] = [1, g] # The second position of the tuple is the gateway
+        problem_node_count = {k: v for k, v in problem_node_count.items() if v[0] >= 2}
+        return problem_node_count
 
 
 network = Graph(links_map, gateway_nodes)
@@ -142,18 +175,18 @@ previous_from_node_sever_link = -1
 #  shut them down first, this is a Best-First search
 # game loop
 # while True:
-for si in [2, 3, 8, 17, 16]:
+for si in [0, 3, 6, 3, 7]:
     #si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
     print(str(si), file=sys.stderr)
 
-    distances, previous_nodes = network.dijsktra_distances_to_goals(si, gateway_nodes)
+    distances, previous_nodes = network.dijsktra_distances(si)
 
-    if not distances:
+    if not network.filter_dijsktra_distances_to_goals(distances, previous_nodes)[0]:
         break
 
-    gateway_to_shutdown = network.get_gateway_to_shutdown(distances, previous_nodes, previous_from_node_sever_link)
-
-    from_node_sever_link = previous_nodes.get(gateway_to_shutdown)
+    from_node_sever_link, gateway_to_shutdown = network.get_gateway_to_shutdown(distances,
+                                                          previous_nodes,
+                                                          previous_from_node_sever_link)
 
     print(f"{str(from_node_sever_link)} {str(gateway_to_shutdown)}")
     network.sever_link(from_node_sever_link, gateway_to_shutdown)
