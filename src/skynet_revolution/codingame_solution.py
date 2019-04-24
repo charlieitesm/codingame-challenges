@@ -41,6 +41,10 @@ for i in range(e):
 
 
 class Graph:
+    """
+    This class provides and abstraction of how the game space looks like
+    """
+
     DEFAULT_LENGTH = 1
     SAFE_DISTANCE = 2
 
@@ -50,10 +54,17 @@ class Graph:
         self.edges = edges
 
     def sever_link(self, from_node: int, to_node: int):
+        """This removes the edges between two nodes in this Graph"""
         self.edges.get(from_node).remove(to_node)
         self.edges.get(to_node).remove(from_node)
 
     def dijsktra_distances(self, from_node: int) -> tuple:
+        """
+        Calculate the Dijsktra distances from a given node to all of the other nodes in this Graph.
+        Dijsktra calculates the shortest path between two nodes, even if there are multiple paths connecting them
+        :param from_node: an int representing the ID of the node from which to calculate the distances
+        :return: a tuple of dict containing the distances to all the nodes in this Graph with respect to from_node
+        """
         dist = {}
         prev = {}
         heap_queue = []
@@ -91,21 +102,36 @@ class Graph:
         return dist, prev
 
     def filter_dijsktra_distances_to_goals(self, dist: dict, prev: dict) -> tuple:
+        """
+        Filter the distances to show only the distance information related for the Gateway nodes
+        :param dist: a dict with the distances for all the nodes
+        :param prev: a dict with the information for previous nodes
+        :return: a tuple with the dist and prev for goal nodes only
+        """
         new_dist = {}
         new_prev = {}
 
         for g in self.goal_nodes:
             goal_distance = dist.get(g)
 
+            # This asks, is there a path to the goal? Goals with no available path have a distance == INFINITY
             if goal_distance != math.inf:
                 new_dist[g] = dist.get(g)
                 new_prev[g] = prev.get(g)
         return new_dist, new_prev
 
     def get_gateway_to_shutdown(self, d: dict, p: dict) -> tuple:
+        """
+        Calculates the edge to shutdown based on the urgency to do so. This urgency is calculated by how close the agent
+        is to the nearest gateway.
+        :param d: a dict with the distances to the node the agent is currently in
+        :param p: a dict with the predecessors for each of the nodes
+        :return: a tuple with the edge represented by two vertex to sever
+        """
         # This will let us switch between gateway nodes and make sure we have a better chance at catching the agent
         goal_dist, goal_prev = self.filter_dijsktra_distances_to_goals(d, p)
 
+        # Get the closest Gateway
         candidate_gateway = min(goal_dist, key=goal_dist.get)
 
         min_value = goal_dist[candidate_gateway]
@@ -159,6 +185,11 @@ class Graph:
         return from_node, candidate_gateway
 
     def get_problem_node_count(self) -> dict:
+        """
+        Get a dict with all of the nodes for which there is more than one edge. This will help us detect double-entry
+            gateways
+        :return: a dict with Gateway nodes with more than one entry edge
+        """
         problem_node_count = {}
 
         for g in self.goal_nodes:
@@ -170,19 +201,8 @@ class Graph:
         problem_node_count = {k: v for k, v in problem_node_count.items() if v[0] >= 2}
         return problem_node_count
 
-    def get_problem_node_count(self) -> dict:
-        problem_node_count = {}
 
-        for g in self.goal_nodes:
-            for neighbor in self.edges.get(g):
-                if neighbor in problem_node_count:
-                    problem_node_count[neighbor][0] += 1
-                else:
-                    problem_node_count[neighbor] = [1, g]  # The second position of the tuple is the gateway
-        problem_node_count = {k: v for k, v in problem_node_count.items() if v[0] >= 2}
-        return problem_node_count
-
-
+# Initialize the representation of the game map
 network = Graph(links_map, gateway_nodes)
 previous_from_node_sever_link = -1
 
@@ -200,12 +220,18 @@ while True:
     si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
     print(f"Agent is at: str(si)", file=sys.stderr)
 
+    # Calculate the Dijsktra distances to all nodes for the current position of the agent
     distances, previous_nodes = network.dijsktra_distances(si)
 
+    # If there is not a path to the Gateways (the goals) then we are done, the Agent can no longer escape!
     if not network.filter_dijsktra_distances_to_goals(distances, previous_nodes)[0]:
         break
 
+    # Get the coordinates for the most urgent edge to sever
     from_node_sever_link, gateway_to_shutdown = network.get_gateway_to_shutdown(distances, previous_nodes)
 
+    # Print the coordinates so that the game engine severs the edge in its own game map
     print(f"{str(from_node_sever_link)} {str(gateway_to_shutdown)}")
+
+    # Sever the link from our own representation of the game map
     network.sever_link(from_node_sever_link, gateway_to_shutdown)
