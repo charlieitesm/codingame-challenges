@@ -1,8 +1,9 @@
+"""
+The following module is a solution for https://www.codingame.com/ide/puzzle/skynet-revolution-episode-2
+"""
 import sys
 import math
 import heapq
-
-from skynet_revolution.episode2.file_utils import debug_get_info_from_file
 
 # Auto-generated code below aims at helping you parse
 # the standard input according to the problem statement.
@@ -11,38 +12,32 @@ from skynet_revolution.episode2.file_utils import debug_get_info_from_file
 # l: the number of links
 # e: the number of exit gateways
 
-# links_map = {}
+links_map = {}
 
-# n, l, e = [int(i) for i in input().split()]
-# print(" ".join([str(n), str(l), str(e)]), file=sys.stderr)
-# for i in range(l):
-#     # n1: N1 and N2 defines a link between these nodes
-#     n1, n2 = [int(j) for j in input().split()]
-#     print(" ".join([str(n1), str(n2)]), file=sys.stderr)
-#
-#     if n1 not in links_map:
-#         links_map[n1] = [n2]
-#     else:
-#         links_map.get(n1).append(n2)
-#
-#     # Record the reverse vertice for practical purposes
-#     if n2 not in links_map:
-#         links_map[n2] = [n1]
-#     else:
-#         links_map.get(n2).append(n1)
-#
-# gateway_nodes = []
-# valid_gateway_links = []
-#
-# for i in range(e):
-#     e1 = int(input())  # the index of a gateway node
-#     print(str(e1), file=sys.stderr)
-#     gateway_nodes.append(e1)
-#     valid_gateway_links.extend([(e1, e2) for e2 in links_map.get(e1, [])])
-#
-# print(f"Gateway links: {valid_gateway_links}", file=sys.stderr)
+n, l, e = [int(i) for i in input().split()]
+print(" ".join([str(n), str(l), str(e)]), file=sys.stderr)
+for i in range(l):
+    # n1: N1 and N2 defines a link between these nodes
+    n1, n2 = [int(j) for j in input().split()]
+    print(" ".join([str(n1), str(n2)]), file=sys.stderr)
 
-n, l, e, links_map, gateway_nodes = debug_get_info_from_file("test_case1.txt")
+    if n1 not in links_map:
+        links_map[n1] = [n2]
+    else:
+        links_map.get(n1).append(n2)
+
+    # Record the reverse vertice for practical purposes
+    if n2 not in links_map:
+        links_map[n2] = [n1]
+    else:
+        links_map.get(n2).append(n1)
+
+gateway_nodes = []
+
+for i in range(e):
+    e1 = int(input())  # the index of a gateway node
+    print(str(e1), file=sys.stderr)
+    gateway_nodes.append(e1)
 
 
 class Graph:
@@ -115,16 +110,37 @@ class Graph:
 
         min_value = goal_dist[candidate_gateway]
 
-        if min_value < Graph.SAFE_DISTANCE:
-            # The next gateway is not at a safe distance, shut it down ASAP!
+        if min_value < Graph.SAFE_DISTANCE:  # The next gateway is not at a safe distance, shut it down ASAP!
 
             from_node = p.get(candidate_gateway)
+
+        elif Graph.SAFE_DISTANCE <= min_value <= Graph.SAFE_DISTANCE:
+            # We have leeway to start shutting down problematic nodes that lead to two different gateways
+            problem_node_count = self.get_problem_node_count()
+
+            if not problem_node_count:  # If there are no problems, return the candidate_gateway
+                return p.get(candidate_gateway), candidate_gateway
+
+            problem_distance = math.inf
+            most_problematic_node = None
+            gateway_connected_to_problem_node = None
+
+            for k in problem_node_count.keys():
+                if d[k] < problem_distance:
+                    problem_distance = problem_node_count[k][0]
+                    most_problematic_node = k
+                    gateway_connected_to_problem_node = problem_node_count[k][1]
+
+            candidate_gateway = gateway_connected_to_problem_node
+            from_node = most_problematic_node
+
+            return from_node, candidate_gateway
 
         else:
             # We have leeway to start shutting down problematic nodes that lead to two different gateways
             problem_node_count = self.get_problem_node_count()
 
-            if not problem_node_count: # If there are no problems, return the candidate_gateway
+            if not problem_node_count:  # If there are no problems, return the candidate_gateway
                 return p.get(candidate_gateway), candidate_gateway
 
             problem_distance = math.inf
@@ -150,7 +166,19 @@ class Graph:
                 if neighbor in problem_node_count:
                     problem_node_count[neighbor][0] += 1
                 else:
-                    problem_node_count[neighbor] = [1, g] # The second position of the tuple is the gateway
+                    problem_node_count[neighbor] = [1, g]  # The second position of the tuple is the gateway
+        problem_node_count = {k: v for k, v in problem_node_count.items() if v[0] >= 2}
+        return problem_node_count
+
+    def get_problem_node_count(self) -> dict:
+        problem_node_count = {}
+
+        for g in self.goal_nodes:
+            for neighbor in self.edges.get(g):
+                if neighbor in problem_node_count:
+                    problem_node_count[neighbor][0] += 1
+                else:
+                    problem_node_count[neighbor] = [1, g]  # The second position of the tuple is the gateway
         problem_node_count = {k: v for k, v in problem_node_count.items() if v[0] >= 2}
         return problem_node_count
 
@@ -166,11 +194,11 @@ previous_from_node_sever_link = -1
 
 # Calculate the distance from the nodes that lead to gateways to the agent so that we can
 #  shut them down first, this is a Best-First search
+
 # game loop
-# while True:
-for si in [0, 3, 6, 3, 7]:
-    #si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
-    print(str(si), file=sys.stderr)
+while True:
+    si = int(input())  # The index of the node on which the Skynet agent is positioned this turn
+    print(f"Agent is at: str(si)", file=sys.stderr)
 
     distances, previous_nodes = network.dijsktra_distances(si)
 
@@ -181,4 +209,3 @@ for si in [0, 3, 6, 3, 7]:
 
     print(f"{str(from_node_sever_link)} {str(gateway_to_shutdown)}")
     network.sever_link(from_node_sever_link, gateway_to_shutdown)
-
